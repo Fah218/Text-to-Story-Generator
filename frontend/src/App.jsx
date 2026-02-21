@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2pdf from 'html2pdf.js';
+import axios from "axios";
+
 
 const GENRES = ['Fantasy', 'Sci-fi', 'Mystery', 'Educational', 'Romance', 'Thriller', 'Adventure', 'Horror'];
 const TONES = ['Lighthearted', 'Serious', 'Humorous', 'Dark', 'Inspirational', 'Dramatic', 'Whimsical', 'Mysterious'];
@@ -32,6 +34,7 @@ const EXAMPLES = [
 ];
 
 export default function App() {
+  const [selectedImage, setSelectedImage] = useState(null);
   const [prompt, setPrompt] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("Sci-fi");
   const [selectedTone, setSelectedTone] = useState("Serious");
@@ -48,22 +51,87 @@ export default function App() {
   const [generatedStory, setGeneratedStory] = useState(null);
   const storyRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
+  
 
-  const handleExportPDF = () => {
-    if (!storyRef.current || !generatedStory) return;
-    setIsExporting(true);
+  useEffect(() => {
+  const handleEsc = (e) => {
+    if (e.key === "Escape") {
+      setSelectedImage(null);
+    }
+  };
 
+  window.addEventListener("keydown", handleEsc);
+  return () => window.removeEventListener("keydown", handleEsc);
+  }, []);
+
+  const handleExportPDF = async () => {
+  if (!storyRef.current || !generatedStory) return;
+  setIsExporting(true);
+
+  try {
     const element = storyRef.current;
+
+    // Clone node to avoid Tailwind oklch parsing issues
+    const clone = element.cloneNode(true);
+
+    // Force safe background & text color
+    clone.style.background = "#ffffff";
+    clone.style.color = "#000000";
+
+    // Append clone temporarily (required for proper rendering)
+    clone.style.position = "absolute";
+    clone.style.left = "-9999px";
+    document.body.appendChild(clone);
+
+    // Select all images inside cloned node
+    const images = clone.querySelectorAll("img");
+
+    // Wait for all images to load
+    await Promise.all(
+      Array.from(images).map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      })
+    );
+
     const opt = {
-      margin: 10,
-      filename: `${generatedStory.title.replace(/\s+/g, '_')}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      margin: [0.5, 0.5],
+      filename: `${generatedStory.title.replace(/\s+/g, "_")}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        logging: false,
+        backgroundColor: "#ffffff", // Critical Fix
+      },
+      jsPDF: {
+        unit: "in",
+        format: "letter",
+        orientation: "portrait",
+      },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
 
-    html2pdf().set(opt).from(element).save().then(() => setIsExporting(false));
-  };
+    await html2pdf().set(opt).from(clone).save();
+
+    // Remove clone after export
+    document.body.removeChild(clone);
+
+  } catch (error) {
+    console.error("PDF Export failed:", error);
+    alert("Failed to export PDF.");
+  } finally {
+    setIsExporting(false);
+  }
+ };
+  
+
+    
+  
 
   const loadingStages = [
     { text: "Planning story structure...", icon: <BookOpen className="w-5 h-5 animate-pulse" /> },
@@ -71,36 +139,54 @@ export default function App() {
     { text: "Generating illustrations...", icon: <ImageIcon className="w-5 h-5 animate-pulse" /> }
   ];
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
-    setIsGenerating(true);
-    setLoadingStage(0);
-    setGeneratedStory(null);
+    try {
+      setIsGenerating(true);
+      setGeneratedStory(null);
 
-    // Mock the generation process for demo
-    let currentStage = 0;
-    const interval = setInterval(() => {
-      currentStage++;
-      if (currentStage > 2) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsGenerating(false);
-          setGeneratedStory({
-            title: "The Neon Enigma",
-            concept: prompt,
-            scenes: Array.from({ length: scenes }).map((_, i) => ({
-              id: i + 1,
-              title: `Scene ${i + 1}: The Discovery`,
-              text: "The neon lights flickered over the wet pavement, reflecting a city that never slept but always dreamed. Detective Aris pulled his collar up against the chill, his cybernetic eye scanning the alleyway. The jazz club 'Blue Note' was just ahead, its neon sign buzzing like a dying insect. Inside, the conspiracy lay waiting...",
-              imageUrl: `https://images.unsplash.com/photo-1517594422361-5e1f74bc9338?auto=format&fit=crop&q=80&w=800&h=400`
-            }))
-          });
-        }, 1500);
-      } else {
-        setLoadingStage(currentStage);
-      }
-    }, 2000);
+    // Loading animation stages
+      setLoadingStage(0);
+
+    // Stage 1 - Planning
+      setTimeout(() => setLoadingStage(1), 1000);
+
+    // Stage 2 - Writing
+      setTimeout(() => setLoadingStage(2), 2000);
+
+      const response = await axios.post(
+        "http://localhost:5000/api/story/generate",
+        {
+          concept: prompt,
+          genre: selectedGenre,
+          tone: selectedTone,
+          scenes: scenes,
+          audience: targetAudience
+        }
+      );
+
+      const data = response.data;
+
+    // Map backend structure to frontend structure
+      const formattedStory = {
+        title: data.title,
+        concept: prompt,
+        scenes: data.scenes.map((scene, index) => ({
+          id: index + 1,
+          title: scene.title || `Scene ${index + 1}`,
+          text: scene.description,
+          imageUrl: scene.image // Leonardo returns image URL
+        }))
+      };
+      setLoadingStage(2);
+      setGeneratedStory(formattedStory);
+
+    } catch (error) {
+      console.error("Frontend Error:", error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -319,26 +405,94 @@ export default function App() {
                 <div className="absolute inset-0 -translate-x-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-shimmer" />
               )}
             </button>
-
+            
+            
+              
             <AnimatePresence>
-              {generatedStory && !isGenerating && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  className="overflow-hidden"
-                >
-                  <button
-                    onClick={handleExportPDF}
-                    disabled={isExporting}
-                    className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-slate-200 bg-white font-semibold text-base transition-all shadow-sm ${isExporting ? 'text-slate-400 bg-slate-50 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
-                  >
-                    {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5 text-slate-500" />}
-                    {isExporting ? 'Exporting...' : 'Export Story as PDF'}
-                  </button>
-                </motion.div>
-              )}
+                {generatedStory && !isGenerating && (
+                  <div className="max-w-4xl mx-auto pb-20">
+        
+                    {/* PDF EXPORT BUTTON - Placed above the story content */}
+                    <div className="flex justify-end mb-6">
+                      <button
+                        onClick={handleExportPDF}
+                        disabled={isExporting}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-sm
+                          ${isExporting 
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                            : 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50'
+                          }`}
+                      >
+                        {isExporting ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Preparing PDF...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-5 h-5" />
+                            Download PDF
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* THE ACTUAL STORY CONTENT (Captured by Ref) */}
+                    <motion.div
+                      ref={storyRef}
+                      id="story-content"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white p-10 rounded-3xl shadow-xl border border-slate-100"
+                    >
+                      <div className="mb-12 text-center">
+                        <h1 className="text-4xl lg:text-6xl font-black text-slate-900 mb-4 tracking-tight">
+                          {generatedStory.title}
+                        </h1>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="h-1 w-12 bg-indigo-500 rounded-full"></span>
+                          <p className="text-slate-400 font-medium uppercase tracking-widest text-xs">
+                            A {selectedGenre} Story
+                          </p>
+                          <span className="h-1 w-12 bg-indigo-500 rounded-full"></span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-16">
+                        {generatedStory.scenes.map((scene, idx) => (
+                          <div
+                            key={scene.id}
+                            className="break-inside-avoid" 
+                            style={{ pageBreakInside: 'avoid' }} // Extra insurance for PDF engines
+                          >
+                            <div className="relative mb-8">
+                              <img
+                                src={scene.imageUrl}
+                                alt={scene.title}
+                                crossOrigin="anonymous" 
+                                className="w-full h-auto rounded-2xl shadow-lg border border-slate-100"
+                              />
+                            </div>
+                
+                            <div className="max-w-2xl mx-auto text-center md:text-left">
+                              <div className="text-indigo-600 font-bold text-sm tracking-[0.2em] uppercase mb-2">
+                                Chapter {idx + 1}
+                              </div>
+                              <h3 className="text-3xl font-bold text-slate-800 mb-6 leading-tight">
+                                {scene.title}
+                              </h3>
+                              <p className="text-slate-600 text-xl leading-relaxed font-serif">
+                                {scene.text}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
             </AnimatePresence>
+           
 
             {/* Loading Stages indicator */}
             <AnimatePresence>
@@ -423,32 +577,53 @@ export default function App() {
                 <div className="space-y-12">
                   {generatedStory.scenes.map((scene, idx) => (
                     <motion.div
-                      key={scene.id}
+                      ref={storyRef}
+                      id="story-content"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.15 + 0.2 }}
-                      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden group hover:shadow-md transition-shadow"
+  // Use inline style for background to override any OKLCH theme variables
+                      style={{ backgroundColor: '#ffffff', color: '#0f172a' }} 
+                      className="max-w-4xl mx-auto p-10 rounded-3xl shadow-xl border border-slate-100"
                     >
-                      <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-slate-100 group">
-                        <img
-                          src={scene.imageUrl}
-                          alt={`Illustration for ${scene.title}`}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                          <button className="text-white/80 hover:text-white flex items-center gap-2 text-sm font-medium">
-                            <ImageIcon className="w-4 h-4" /> View Full Image
-                          </button>
+                      <div className="mb-12 text-center">
+                        <h1 style={{ color: '#0f172a' }} className="text-4xl lg:text-6xl font-black mb-4 tracking-tight">
+                          {generatedStory.title}
+                        </h1>
+                        <div className="flex items-center justify-center gap-2">
+                          <span style={{ backgroundColor: '#6366f1' }} className="h-1 w-12 rounded-full"></span>
+                          <p style={{ color: '#64748b' }} className="font-medium uppercase tracking-widest text-xs">
+                            A {selectedGenre} Story
+                          </p>
+                          <span style={{ backgroundColor: '#6366f1' }} className="h-1 w-12 rounded-full"></span>
                         </div>
                       </div>
-                      <div className="p-8">
-                        <div className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-bold tracking-widest uppercase mb-4">
-                          Scene {idx + 1}
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-800 mb-4">{scene.title}</h3>
-                        <p className="text-slate-600 text-lg leading-relaxed whitespace-pre-line">
-                          {scene.text}
-                        </p>
+
+                      <div className="space-y-16">
+                        {generatedStory.scenes.map((scene, idx) => (
+                          <div key={scene.id} className="break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
+                            <div className="relative mb-8">
+                              <img
+                                src={scene.imageUrl}
+                                alt={scene.title}
+                                crossOrigin="anonymous"
+                                className="w-full h-auto rounded-2xl shadow-lg"
+                                style={{ border: '1px solid #f1f5f9' }}
+                              />
+                            </div>
+        
+                            <div className="max-w-2xl mx-auto text-center md:text-left">
+                              <div style={{ color: '#4f46e5' }} className="font-bold text-sm tracking-[0.2em] uppercase mb-2">
+                               Chapter {idx + 1}
+                              </div>
+                              <h3 style={{ color: '#1e293b' }} className="text-3xl font-bold mb-6 leading-tight">
+                                {scene.title}
+                              </h3>
+                              <p style={{ color: '#334155' }} className="text-xl leading-relaxed font-serif">
+                                {scene.text}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </motion.div>
                   ))}
@@ -460,6 +635,36 @@ export default function App() {
                     Modify Story
                   </button>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selectedImage && (
+              <motion.div
+                className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSelectedImage(null)}
+              >
+                {/* Close Button */}
+                <button
+                  className="absolute top-6 right-6 text-white text-3xl font-bold"
+                  onClick={() => setSelectedImage(null)}
+                >
+                  ✕
+                </button>
+
+                {/* Image */}
+                <motion.img
+                  src={selectedImage}
+                  className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </motion.div>
             )}
           </AnimatePresence>
