@@ -9,7 +9,7 @@ This is perfect for hackathon demos that wow judges with creativity, polish, and
 ### Core Workflow
 1. **Interactive Input:** Users enter vibe keywords, set genres, tones, and target audiences via a beautiful, sleek React frontend.
 2. **Text Generation (Backend Chaining):** The backend sequentially chains APIs (e.g., Cohere/GPT). It generates a 200-300 word story segment based on keywords and prior context. The prompt engineering is highly specific: *"Write in second-person, vivid style matching the {vibe}, end with a cliffhanger."*
-3. **Image Synthesis:** The new story snippet is fed to an image generation API (like Stability AI/DreamStudio) for scene-specific visuals using prompts like: *"Illustrate this scene: {last_paragraph} in {vibe} aesthetic, cinematic lighting."*
+3. **Image Synthesis:** The new story snippet is fed to an image generation API (Leonardo AI) for scene-specific visuals using prompts like: *"Illustrate this scene: {last_paragraph} in {vibe} aesthetic, cinematic lighting."*
 4. **AR/Immersive Rendering:** Images and story text are piped to the frontend to create shareable "story cards" (with PDF export capabilities) and an interactive read-through interface that feels alive with parallax and smooth animations.
 
 ---
@@ -27,7 +27,7 @@ This repository contains a full-stack Next-Generation React application.
 
 ### The Backend (`/backend`)
 * **Framework:** Node.js with Express.
-* **AI Integration:** Prompts and API keys are managed here to securely connect to Cohere (for text) and Hugging Face/Stability (for images).
+* **AI Integration:** Prompts and API keys are managed here to securely connect to Cohere (for text) and Leonardo AI (for images).
 * **Database (MongoDB):** Utilizes mongoose to connect to a MongoDB Atlas cluster.
 
 ---
@@ -55,6 +55,7 @@ PORT=5001
 MONGODB_URI=your_mongodb_cluster_connection_string
 JWT_SECRET=your_secure_jwt_secret_key
 COHERE_API_KEY=your_cohere_text_generation_api_key
+LEONARDO_API_KEY=your_leonardo_ai_image_generation_api_key
 ```
 
 ### 2. Start the Backend Server
