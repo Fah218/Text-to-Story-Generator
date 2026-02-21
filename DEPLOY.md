@@ -67,8 +67,11 @@ You **do NOT need to create a new cluster**. For deployment, simply:
    | Advanced Setting        | Recommended Value                      |
    |-------------------------|----------------------------------------|
    | **Health Check Path**   | `/` (or `/api/health` if you have one) |
+   | **Pre-Deploy Command**  | *(leave blank — no migrations needed for MongoDB)* |
    | **Auto-Deploy**         | `Yes` — re-deploys on every GitHub push |
    | **Instance Type**       | `Free` (or `Starter` for no sleep)     |
+
+   > 📝 **About Pre-Deploy Command:** Render runs this command **before** the start command. It is useful for tasks like database migrations or seeding static assets. Since this project uses **MongoDB** (which is schema-less and does not require migrations), you can safely **leave this field blank** for now.
 
    > 💡 **Tip — Preventing Sleep on Free Tier:** Render's free tier spins down after 15 minutes of inactivity, causing a ~30 second cold start on the next request. To avoid this during a demo or hackathon, use a free uptime monitoring service like [UptimeRobot](https://uptimerobot.com) to ping your backend URL every 10 minutes and keep it awake.
 
