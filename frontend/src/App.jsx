@@ -715,12 +715,12 @@ export default function App() {
                               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                             />
                             {/* Gradient Overlay for Image */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-8">
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center p-8">
                               <button
                                 onClick={() => setSelectedImage(generatedStory.scenes[activeScene].imageUrl)}
-                                className="text-white/90 hover:text-white flex items-center gap-2 text-sm font-semibold bg-white backdrop-blur-md w-fit px-4 py-2 rounded-xl border border-white transition-all hover:bg-white"
+                                className="text-slate-800 hover:text-indigo-700 flex items-center gap-2 text-sm font-extrabold bg-white/90 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white shadow-xl transition-all hover:scale-105 hover:-translate-y-1 hover:bg-white"
                               >
-                                <ImageIcon className="w-4 h-4" /> View Full Image
+                                <ImageIcon className="w-5 h-5" /> View Scene Image
                               </button>
                             </div>
                           </div>
@@ -819,12 +819,7 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="mt-12 text-center border-t border-slate-200 pt-8">
-                      <button className="bg-brand-card backdrop-blur-md text-slate-700 border border-brand-border shadow-sm hover:border-indigo-300 hover:text-brand-text hover:bg-brand-card font-semibold py-3 px-8 rounded-xl transition-colors inline-flex items-center gap-2">
-                        <Wand2 className="w-4 h-4" />
-                        Modify Settings to Generate Again
-                      </button>
-                    </div>
+                    <div className="mt-12 text-center border-t border-slate-200 pt-8" />
                   </motion.div>
                 )}
               </AnimatePresence>
