@@ -6,6 +6,10 @@ export default function ClickParticles() {
 
     useEffect(() => {
         const handleClick = (e) => {
+            // Skip particles for form inputs to avoid lag during typing
+            const tag = e.target?.tagName?.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
             // Create 8 particles for each click
             const newParticles = Array.from({ length: 8 }).map((_, i) => {
                 // Random angle (0 to 360 degrees)

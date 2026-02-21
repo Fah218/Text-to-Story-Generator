@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -12,10 +12,13 @@ import {
   Users,
   Download,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  Edit2,
+  Check,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 
 // Redux
@@ -23,7 +26,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   setPrompt, setSelectedGenre, setSelectedTone,
   setSceneCount, setTargetAudience, setActiveScene,
-  setIsGenerating, setLoadingStage, setGeneratedStory
+  setIsGenerating, setLoadingStage, setGeneratedStory, updateSceneText
 } from './store/storySlice';
 import axios from 'axios';
 import { toggleAdvancedOpen, setIsExamplesOpen, setAuthModal } from './store/uiSlice';
@@ -35,6 +38,7 @@ import About from './components/About';
 import AuthModal from './components/AuthModal';
 import ClickParticles from './components/ClickParticles';
 import Footer from './components/Footer';
+import StoryHistory, { saveStoryToHistory } from './components/StoryHistory';
 
 const GENRES = ['Fantasy', 'Sci-fi', 'Mystery', 'Educational', 'Romance', 'Thriller', 'Adventure', 'Horror'];
 const TONES = ['Lighthearted', 'Serious', 'Humorous', 'Dark', 'Inspirational', 'Dramatic', 'Whimsical', 'Mysterious'];
@@ -68,12 +72,47 @@ export default function App() {
 
   const { generateStory } = useStoryGeneration();
 
-  const storyRef = useRef(null);
   const [isExporting, setIsExporting] = React.useState(false);
+  const [selectedImage, setSelectedImage] = React.useState(null);
+  const [isEditingScene, setIsEditingScene] = React.useState(false);
+  const [editingText, setEditingText] = React.useState('');
+
+  useEffect(() => {
+    setIsEditingScene(false);
+  }, [activeScene]);
+
+  // Auth State
+  const [user, setUser] = React.useState(null);
+
+  const readUserFromStorage = React.useCallback(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        setUser(null);
+      }
+    } else {
+      setUser(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    readUserFromStorage();
+    // Listen for auth changes from AuthModal (login/signup without page reload)
+    window.addEventListener('auth-updated', readUserFromStorage);
+    return () => window.removeEventListener('auth-updated', readUserFromStorage);
+  }, [readUserFromStorage]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
 
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         setSelectedImage(null);
       }
     };
@@ -83,65 +122,132 @@ export default function App() {
   }, []);
 
   const handleExportPDF = async () => {
-    if (!storyRef.current || !generatedStory) return;
+    if (!generatedStory) return;
     setIsExporting(true);
 
     try {
-      const element = storyRef.current;
-
-      // Clone node to avoid Tailwind oklch parsing issues
-      const clone = element.cloneNode(true);
-
-      // Force safe background & text color
-      clone.style.background = "#ffffff";
-      clone.style.color = "#000000";
-
-      // Append clone temporarily (required for proper rendering)
-      clone.style.position = "absolute";
-      clone.style.left = "-9999px";
-      document.body.appendChild(clone);
-
-      // Select all images inside cloned node
-      const images = clone.querySelectorAll("img");
-
-      // Wait for all images to load
-      await Promise.all(
-        Array.from(images).map((img) => {
-          if (img.complete) return Promise.resolve();
-          return new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
+      // Helper: fetch an image URL and convert to base64 data URL
+      const toBase64 = async (url) => {
+        try {
+          const response = await fetch(url, { mode: 'cors' });
+          if (!response.ok) throw new Error('fetch failed');
+          const blob = await response.blob();
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
           });
-        })
-      );
-
-      const opt = {
-        margin: [0.5, 0.5],
-        filename: `${generatedStory.title.replace(/\s+/g, "_")}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          logging: false,
-          backgroundColor: "#ffffff", // Critical Fix
-        },
-        jsPDF: {
-          unit: "in",
-          format: "letter",
-          orientation: "portrait",
-        },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        } catch {
+          return null; // gracefully skip unloadable images
+        }
       };
 
-      await html2pdf().set(opt).from(clone).save();
+      // Letter page dimensions in points (72pt = 1in)
+      const PAGE_W = 595; // 8.27in * 72
+      const PAGE_H = 842; // 11.69in * 72
+      const MARGIN = 40;
+      const CONTENT_W = PAGE_W - MARGIN * 2;
 
-      // Remove clone after export
-      document.body.removeChild(clone);
+      const doc = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+      let y = MARGIN;
+
+      const checkPage = (neededHeight) => {
+        if (y + neededHeight > PAGE_H - MARGIN) {
+          doc.addPage();
+          y = MARGIN;
+        }
+      };
+
+      // --- Cover / Title page ---
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(28);
+      doc.setTextColor(15, 23, 42); // slate-900
+      const titleLines = doc.splitTextToSize(generatedStory.title, CONTENT_W);
+      titleLines.forEach(line => {
+        checkPage(36);
+        doc.text(line, PAGE_W / 2, y, { align: 'center' });
+        y += 36;
+      });
+
+      y += 10;
+
+      // Subtitle badge
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(100, 116, 139); // slate-500
+      const subtitle = `A ${selectedGenre || 'Story'} · ${selectedTone || ''} · ${targetAudience || ''}`;
+      doc.text(subtitle.trim().replace(/·\s*$/, ''), PAGE_W / 2, y, { align: 'center' });
+      y += 30;
+
+      // Decorative divider
+      doc.setDrawColor(99, 102, 241); // indigo-500
+      doc.setLineWidth(1.5);
+      doc.line(PAGE_W / 2 - 60, y, PAGE_W / 2 + 60, y);
+      y += 40;
+
+      // --- Scenes ---
+      for (let idx = 0; idx < generatedStory.scenes.length; idx++) {
+        const scene = generatedStory.scenes[idx];
+
+        // Chapter label
+        checkPage(24);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(99, 102, 241); // indigo
+        doc.text(`CHAPTER ${idx + 1}`, MARGIN, y);
+        y += 18;
+
+        // Scene title
+        checkPage(32);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(15, 23, 42); // slate-900
+        const sceneTitleLines = doc.splitTextToSize(scene.title || `Scene ${idx + 1}`, CONTENT_W);
+        sceneTitleLines.forEach(line => {
+          checkPage(24);
+          doc.text(line, MARGIN, y);
+          y += 24;
+        });
+        y += 8;
+
+        // Scene image
+        if (scene.imageUrl) {
+          const imgData = await toBase64(scene.imageUrl);
+          if (imgData) {
+            const IMG_H = 200;
+            checkPage(IMG_H + 16);
+            try {
+              doc.addImage(imgData, 'JPEG', MARGIN, y, CONTENT_W, IMG_H, undefined, 'FAST');
+              y += IMG_H + 16;
+            } catch (imgErr) {
+              console.warn('Could not embed image:', imgErr);
+            }
+          }
+        }
+
+        // Scene text
+        doc.setFont('times', 'normal');
+        doc.setFontSize(12);
+        doc.setTextColor(71, 85, 105); // slate-600
+        const textLines = doc.splitTextToSize(scene.text || '', CONTENT_W);
+        textLines.forEach(line => {
+          checkPage(18);
+          doc.text(line, MARGIN, y);
+          y += 18;
+        });
+
+        y += 30; // space between scenes
+      }
+
+      // Save
+      const filename = generatedStory.title.replace(/[^a-zA-Z0-9\s_-]/g, '').replace(/\s+/g, '_') + '.pdf';
+      doc.save(filename);
 
     } catch (error) {
-      console.error("PDF Export failed:", error);
-      alert("Failed to export PDF.");
+      console.error('PDF Export failed:', error);
+      alert('PDF export failed: ' + error.message);
     } finally {
       setIsExporting(false);
     }
@@ -200,6 +306,13 @@ export default function App() {
       dispatch(setLoadingStage(2));
       dispatch(setGeneratedStory(formattedStory));
 
+      // ── Auto-save to local history ──
+      saveStoryToHistory(formattedStory, {
+        genre: selectedGenre,
+        tone: selectedTone,
+        audience: targetAudience,
+      });
+
     } catch (error) {
       console.error("Frontend Error:", error);
     } finally {
@@ -208,45 +321,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-sky-100 via-fuchsia-50 to-cyan-100 text-brand-text font-sans selection:bg-indigo-200">
+    <div className="min-h-screen flex flex-col bg-transparent text-brand-text font-sans selection:bg-brand-primary/20">
       <ClickParticles />
       <AuthModal />
 
-      {/* Ambient Aurora Background Orbs (Global) */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute inset-0 bg-white/40 backdrop-blur-[60px] z-10" />
-
-        <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.5, 0.7, 0.5],
-            x: [0, 50, 0],
-            y: [0, -50, 0]
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          className="absolute -top-[10%] -left-[10%] w-[60%] h-[60%] rounded-full bg-blue-300/50 blur-[100px] z-0"
-        />
-        <motion.div
-          animate={{
-            scale: [1, 1.5, 1],
-            opacity: [0.4, 0.6, 0.4],
-            x: [0, -50, 0],
-            y: [0, 50, 0]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[20%] -right-[10%] w-[50%] h-[70%] rounded-full bg-purple-300/50 blur-[120px] z-0"
-        />
-        <motion.div
-          animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.4, 0.5, 0.4],
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-          className="absolute -bottom-[20%] left-[10%] w-[70%] h-[50%] rounded-full bg-cyan-300/50 blur-[120px] z-0"
-        />
-      </div>
       {/* Navbar */}
-      <nav className="h-16 px-6 lg:px-10 border-b border-slate-200/50 bg-brand-card backdrop-blur-xl flex items-center justify-between sticky top-0 z-50">
+      <nav className="h-16 px-6 lg:px-10 border-b border-slate-200 bg-brand-card backdrop-blur-xl flex items-center justify-between sticky top-0 z-50">
         <div
           className="flex items-center gap-2 cursor-pointer"
           onClick={() => navigate('/')}
@@ -311,6 +391,14 @@ export default function App() {
             >
               Studio
             </button>
+            {user && (
+              <button
+                onClick={() => navigate('/history')}
+                className={`text-sm font-medium transition-colors ${currentPage === 'history' ? 'text-brand-primary' : 'text-slate-600 hover:text-brand-primary'}`}
+              >
+                History
+              </button>
+            )}
             <button
               onClick={() => navigate('/about')}
               className={`text-sm font-medium transition-colors ${currentPage === 'about' ? 'text-brand-primary' : 'text-slate-600 hover:text-brand-primary'}`}
@@ -319,18 +407,34 @@ export default function App() {
             </button>
           </div>
           <div className="flex items-center gap-4 border-l border-slate-200 pl-8">
-            <button
-              onClick={() => dispatch(setAuthModal({ isOpen: true, type: 'login' }))}
-              className="text-sm font-medium text-slate-600 hover:text-brand-primary transition-colors"
-            >
-              Log In
-            </button>
-            <button
-              onClick={() => dispatch(setAuthModal({ isOpen: true, type: 'signup' }))}
-              className="text-sm font-semibold bg-brand-primary hover:bg-brand-primary text-white px-4 py-2 rounded-lg transition-all shadow-sm shadow-indigo-200"
-            >
-              Sign Up
-            </button>
+            {user ? (
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-semibold text-indigo-900 bg-indigo-50 px-3 py-1.5 rounded-full">
+                  Hello, {user.name.split(' ')[0]}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm font-medium text-slate-600 hover:text-red-500 transition-colors"
+                >
+                  Log Out
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => dispatch(setAuthModal({ isOpen: true, type: 'login' }))}
+                  className="text-sm font-medium text-slate-600 hover:text-brand-primary transition-colors"
+                >
+                  Log In
+                </button>
+                <button
+                  onClick={() => dispatch(setAuthModal({ isOpen: true, type: 'signup' }))}
+                  className="text-sm font-semibold bg-brand-primary hover:bg-brand-primary text-white px-4 py-2 rounded-lg transition-all shadow-sm shadow-indigo-200"
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -338,11 +442,12 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home navigate={navigate} />} />
         <Route path="/about" element={<About navigate={navigate} />} />
+        <Route path="/history" element={<StoryHistory navigate={navigate} />} />
         <Route path="/studio" element={
-          <div className="max-w-[1400px] w-full mx-auto flex-1 min-h-[calc(100vh-[160px])] flex flex-col lg:flex-row relative">
+          <div className="max-w-[1400px] w-full mx-auto flex-1 flex flex-col lg:flex-row relative overflow-hidden min-h-[calc(100vh-180px)]">
             {/* Left Panel (Controls) */}
             <div className={`w-full lg:w-[450px] bg-brand-card backdrop-blur-2xl border-r border-brand-border shadow-[4px_0_24px_rgba(0,0,0,0.04)] flex flex-col transition-all duration-300 z-10 
-              ${isGenerating ? 'opacity-50 pointer-events-none' : ''}`}
+ ${isGenerating ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
 
@@ -506,7 +611,7 @@ export default function App() {
                       <button
                         onClick={handleExportPDF}
                         disabled={isExporting}
-                        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-slate-200 bg-white font-semibold text-base transition-all shadow-sm ${isExporting ? 'text-slate-400 bg-slate-50 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
+                        className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-slate-200 bg-white font-semibold text-base transition-all shadow-sm ${isExporting ? 'text-slate-400 bg-slate-50 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-50 hover:border-slate-300 '}`}
                       >
                         {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5 text-slate-500" />}
                         {isExporting ? 'Exporting...' : 'Export Story as PDF'}
@@ -522,12 +627,12 @@ export default function App() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="bg-indigo-50/80 border border-indigo-100 p-4 rounded-xl flex flex-col gap-3"
+                      className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex flex-col gap-3"
                     >
                       {loadingStages.map((stage, idx) => (
                         <div key={idx} className="flex items-center gap-3">
                           <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${loadingStage > idx ? 'bg-brand-primary text-white' :
-                            loadingStage === idx ? 'bg-indigo-100 text-brand-primary shadow-inner' : 'bg-slate-200/50 text-slate-400'
+                            loadingStage === idx ? 'bg-indigo-100 text-brand-primary shadow-inner' : 'bg-slate-200 text-slate-400'
                             }`}>
                             {loadingStage > idx ? <Sparkles className="w-4 h-4" /> : stage.icon}
                           </div>
@@ -545,15 +650,15 @@ export default function App() {
             </div>
 
             {/* Right Panel (Output/Viewer) */}
-            <div className="flex-1 bg-transparent relative h-full overflow-y-auto px-6 lg:px-12 py-8 custom-scrollbar relative">
+            <div className={`flex-1 bg-transparent relative h-full ${(!isGenerating && !generatedStory) ? 'flex flex-col items-center justify-center overflow-hidden' : 'overflow-y-auto px-6 lg:px-12 py-8 custom-scrollbar'}`}>
 
               {!isGenerating && !generatedStory && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8">
-                  <div className="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-blue-100 to-cyan-50 flex items-center justify-center shadow-inner border border-white/50">
+                <div className="flex flex-col items-center justify-center text-center p-8">
+                  <div className="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-blue-100 to-cyan-50 flex items-center justify-center shadow-inner border border-white">
                     <Sparkles className="w-10 h-10 text-brand-primary" />
                   </div>
-                  <h3 className="text-2xl font-bold text-brand-text mb-3">Your Story Awaits</h3>
-                  <p className="text-slate-500 max-w-md text-base leading-relaxed">
+                  <h3 className="text-3xl font-extrabold text-slate-800 mb-4 tracking-tight">Your Story Awaits</h3>
+                  <p className="text-slate-600 max-w-md text-lg leading-relaxed font-medium">
                     Enter a concept, select your settings, and watch as our AI weaves a captivating narrative complete with vivid scenes.
                   </p>
                 </div>
@@ -577,7 +682,6 @@ export default function App() {
               <AnimatePresence>
                 {generatedStory && !isGenerating && (
                   <motion.div
-                    ref={storyRef}
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.4, ease: "easeOut" }}
@@ -588,9 +692,9 @@ export default function App() {
                         {generatedStory.title}
                       </h1>
                       <div className="flex flex-wrap items-center justify-center gap-3">
-                        <span className="px-3 py-1 bg-indigo-100 text-brand-primary rounded-full text-xs font-semibold tracking-wider uppercase">{selectedGenre}</span>
-                        <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold tracking-wider uppercase">{selectedTone}</span>
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold tracking-wider uppercase">{targetAudience}</span>
+                        <span className="px-4 py-1.5 bg-white backdrop-blur-md border border-white shadow-sm text-indigo-700 rounded-full text-xs font-bold tracking-wider uppercase">{selectedGenre}</span>
+                        <span className="px-4 py-1.5 bg-white backdrop-blur-md border border-white shadow-sm text-purple-700 rounded-full text-xs font-bold tracking-wider uppercase">{selectedTone}</span>
+                        <span className="px-4 py-1.5 bg-white backdrop-blur-md border border-white shadow-sm text-emerald-700 rounded-full text-xs font-bold tracking-wider uppercase">{targetAudience}</span>
                       </div>
                     </div>
 
@@ -598,34 +702,78 @@ export default function App() {
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={activeScene}
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ duration: 0.3 }}
-                          className="bg-brand-card backdrop-blur-2xl rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-brand-border overflow-hidden group"
+                          initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                          transition={{ duration: 0.4, ease: "easeOut" }}
+                          className="bg-white backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white overflow-hidden group relative"
                         >
-                          <div className="relative h-64 sm:h-[400px] w-full overflow-hidden bg-slate-100 group">
+                          <div className="relative h-72 sm:h-[450px] w-full overflow-hidden bg-slate-100 group">
                             <img
                               src={generatedStory.scenes[activeScene].imageUrl}
                               alt={`Illustration for ${generatedStory.scenes[activeScene].title}`}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                              <button className="text-white/80 hover:text-white flex items-center gap-2 text-sm font-medium">
+                            {/* Gradient Overlay for Image */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-8">
+                              <button
+                                onClick={() => setSelectedImage(generatedStory.scenes[activeScene].imageUrl)}
+                                className="text-white/90 hover:text-white flex items-center gap-2 text-sm font-semibold bg-white backdrop-blur-md w-fit px-4 py-2 rounded-xl border border-white transition-all hover:bg-white"
+                              >
                                 <ImageIcon className="w-4 h-4" /> View Full Image
                               </button>
                             </div>
                           </div>
-                          <div className="p-8 lg:p-10">
-                            <div className="flex items-center justify-between mb-6">
-                              <div className="inline-block px-3 py-1 bg-indigo-50 text-brand-primary rounded-md text-xs font-bold tracking-widest uppercase">
-                                Scene {activeScene + 1} of {generatedStory.scenes.length}
+                          <div className="p-8 lg:p-12 relative bg-gradient-to-b from-white to-slate-50/50">
+                            <div className="flex items-center justify-between mb-8">
+                              <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100/50 text-indigo-600 rounded-xl text-xs font-black tracking-[0.2em] uppercase shadow-inner">
+                                <BookOpen className="w-4 h-4" />
+                                Chapter {activeScene + 1} of {generatedStory.scenes.length}
                               </div>
+                              {!isEditingScene && (
+                                <button
+                                  onClick={() => {
+                                    setEditingText(generatedStory.scenes[activeScene].text);
+                                    setIsEditingScene(true);
+                                  }}
+                                  className="text-slate-500 hover:text-brand-primary flex items-center gap-2 text-sm font-semibold transition-colors bg-white hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-200 shadow-sm"
+                                >
+                                  <Edit2 className="w-4 h-4" /> Edit Text
+                                </button>
+                              )}
                             </div>
-                            <h3 className="text-3xl font-bold text-brand-text mb-6">{generatedStory.scenes[activeScene].title}</h3>
-                            <p className="text-slate-600 text-lg leading-relaxed whitespace-pre-line">
-                              {generatedStory.scenes[activeScene].text}
-                            </p>
+                            <h3 className="text-4xl font-extrabold text-slate-900 mb-6 leading-tight">{generatedStory.scenes[activeScene].title}</h3>
+                            {isEditingScene ? (
+                              <div className="space-y-4 animate-in fade-in duration-200">
+                                <textarea
+                                  value={editingText}
+                                  onChange={(e) => setEditingText(e.target.value)}
+                                  className="w-full min-h-[200px] p-4 rounded-xl border-2 border-indigo-100 bg-white focus:border-brand-primary focus:ring-4 focus:ring-indigo-50 outline-none text-slate-700 text-lg leading-relaxed font-serif resize-y shadow-inner transition-all"
+                                  autoFocus
+                                />
+                                <div className="flex justify-end gap-3">
+                                  <button
+                                    onClick={() => setIsEditingScene(false)}
+                                    className="px-4 py-2 flex items-center gap-2 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-colors border border-transparent"
+                                  >
+                                    <X className="w-4 h-4" /> Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      dispatch(updateSceneText({ sceneIndex: activeScene, newText: editingText }));
+                                      setIsEditingScene(false);
+                                    }}
+                                    className="px-6 py-2 flex items-center gap-2 bg-brand-primary text-white font-bold hover:bg-indigo-600 rounded-xl transition-all shadow-md shadow-indigo-200"
+                                  >
+                                    <Check className="w-4 h-4" /> Save Changes
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-slate-600 text-xl leading-loose font-serif">
+                                {generatedStory.scenes[activeScene].text}
+                              </p>
+                            )}
                           </div>
                         </motion.div>
                       </AnimatePresence>
@@ -671,7 +819,7 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="mt-12 text-center border-t border-slate-200/60 pt-8">
+                    <div className="mt-12 text-center border-t border-slate-200 pt-8">
                       <button className="bg-brand-card backdrop-blur-md text-slate-700 border border-brand-border shadow-sm hover:border-indigo-300 hover:text-brand-text hover:bg-brand-card font-semibold py-3 px-8 rounded-xl transition-colors inline-flex items-center gap-2">
                         <Wand2 className="w-4 h-4" />
                         Modify Settings to Generate Again
@@ -682,151 +830,42 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* Generate Button */}
-            <button
-              disabled={isGenerating || !prompt.trim()}
-              onClick={handleGenerate}
-              className={`w-full relative overflow-hidden group flex items-center justify-center gap-2 py-4 rounded-xl text-white font-bold text-lg shadow-lg transition-all ${isGenerating || !prompt.trim()
-                ? 'bg-slate-300 cursor-not-allowed text-slate-500 shadow-none'
-                : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:shadow-indigo-500/25 active:scale-[0.98]'
-                }`}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5 fill-current" />
-                  Generate Story
-                </>
-              )}
-              {/* Shine effect */}
-              {!isGenerating && prompt.trim() && (
-                <div className="absolute inset-0 -translate-x-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-shimmer" />
-              )}
-            </button>
-
-
-
-            <AnimatePresence>
-              {generatedStory && !isGenerating && (
-                <div className="max-w-4xl mx-auto pb-20">
-
-                  {/* PDF EXPORT BUTTON - Placed above the story content */}
-                  <div className="flex justify-end mb-6">
-                    <button
-                      onClick={handleExportPDF}
-                      disabled={isExporting}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-sm
-                          ${isExporting
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                          : 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50'
-                        }`}
-                    >
-                      {isExporting ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Preparing PDF...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-5 h-5" />
-                          Download PDF
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* THE ACTUAL STORY CONTENT (Captured by Ref) */}
-                  <motion.div
-                    ref={storyRef}
-                    id="story-content"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white p-10 rounded-3xl shadow-xl border border-slate-100"
-                  >
-                    <div className="mb-12 text-center">
-                      <h1 className="text-4xl lg:text-6xl font-black text-slate-900 mb-4 tracking-tight">
-                        {generatedStory.title}
-                      </h1>
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="h-1 w-12 bg-indigo-500 rounded-full"></span>
-                        <p className="text-slate-400 font-medium uppercase tracking-widest text-xs">
-                          A {selectedGenre} Story
-                        </p>
-                        <span className="h-1 w-12 bg-indigo-500 rounded-full"></span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-16">
-                      {generatedStory.scenes.map((scene, idx) => (
-                        <div
-                          key={scene.id}
-                          className="break-inside-avoid"
-                          style={{ pageBreakInside: 'avoid' }} // Extra insurance for PDF engines
-                        >
-                          <div className="relative mb-8">
-                            <img
-                              src={scene.imageUrl}
-                              alt={scene.title}
-                              crossOrigin="anonymous"
-                              className="w-full h-auto rounded-2xl shadow-lg border border-slate-100"
-                            />
-                          </div>
-
-                          <div className="max-w-2xl mx-auto text-center md:text-left">
-                            <div className="text-indigo-600 font-bold text-sm tracking-[0.2em] uppercase mb-2">
-                              Chapter {idx + 1}
-                            </div>
-                            <h3 className="text-3xl font-bold text-slate-800 mb-6 leading-tight">
-                              {scene.title}
-                            </h3>
-                            <p className="text-slate-600 text-xl leading-relaxed font-serif">
-                              {scene.text}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                </div>
-              )}
-            </AnimatePresence>
-
-
-            {/* Loading Stages indicator */}
-            <AnimatePresence>
-              {isGenerating && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-indigo-50/80 border border-indigo-100 p-4 rounded-xl flex flex-col gap-3"
-                >
-                  {loadingStages.map((stage, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${loadingStage > idx ? 'bg-indigo-600 text-white' :
-                        loadingStage === idx ? 'bg-indigo-100 text-indigo-600 shadow-inner' : 'bg-slate-200/50 text-slate-400'
-                        }`}>
-                        {loadingStage > idx ? <Sparkles className="w-4 h-4" /> : stage.icon}
-                      </div>
-                      <span className={`text-sm font-medium ${loadingStage > idx ? 'text-indigo-800' :
-                        loadingStage === idx ? 'text-indigo-600 animate-pulse' : 'text-slate-400'
-                        }`}>
-                        {stage.text}
-                      </span>
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
+      {/* Fullscreen Image Modal */}
+      <AnimatePresence>
+        {selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-lg p-4 md:p-12"
+            onClick={() => setSelectedImage(null)}
+          >
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-6 right-6 lg:top-10 lg:right-10 text-white/70 hover:text-white bg-white hover:bg-white p-3 rounded-full transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={selectedImage}
+              alt="Expanded Scene"
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()} // Prevent clicking img from closing modal
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Footer />
     </div>
   );
 }

@@ -25,6 +25,12 @@ export const storySlice = createSlice({
         setLoadingStage: (state, action) => { state.loadingStage = action.payload; },
         setGeneratedStory: (state, action) => { state.generatedStory = action.payload; },
         setActiveScene: (state, action) => { state.activeScene = action.payload; },
+        updateSceneText: (state, action) => {
+            const { sceneIndex, newText } = action.payload;
+            if (state.generatedStory && state.generatedStory.scenes[sceneIndex]) {
+                state.generatedStory.scenes[sceneIndex].text = newText;
+            }
+        },
         resetGeneration: (state) => {
             state.isGenerating = false;
             state.loadingStage = 0;
@@ -37,7 +43,7 @@ export const storySlice = createSlice({
 export const {
     setPrompt, setSelectedGenre, setSelectedTone, setSceneCount,
     setTargetAudience, setIsGenerating, setLoadingStage,
-    setGeneratedStory, setActiveScene, resetGeneration
+    setGeneratedStory, setActiveScene, updateSceneText, resetGeneration
 } = storySlice.actions;
 
 export default storySlice.reducer;

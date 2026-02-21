@@ -154,13 +154,13 @@ export default function About({ navigate }) {
 
                                     <button
                                         onClick={() => setActiveStep(null)}
-                                        className="absolute top-6 right-6 p-2 text-slate-400 hover:text-brand-text bg-white/50 hover:bg-white/80 rounded-full transition-colors backdrop-blur-md shadow-sm border border-brand-border z-20"
+                                        className="absolute top-6 right-6 p-2 text-slate-400 hover:text-brand-text bg-white hover:bg-white rounded-full transition-colors backdrop-blur-md shadow-sm border border-brand-border z-20"
                                     >
                                         <X className="w-5 h-5" />
                                     </button>
 
                                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8 relative z-10 text-center sm:text-left">
-                                        <div className={`p-4 rounded-2xl bg-white/80 border border-brand-border backdrop-blur-md shadow-sm transform group-hover:scale-105 group-hover:rotate-3 transition-transform duration-500 ${activeStep.shadow}`}>
+                                        <div className={`p-4 rounded-2xl bg-white border border-brand-border backdrop-blur-md shadow-sm transform group-hover:scale-105 group-hover:rotate-3 transition-transform duration-500 ${activeStep.shadow}`}>
                                             {React.cloneElement(activeStep.icon, { className: "w-12 h-12 flex-shrink-0" })}
                                         </div>
                                         <div className="flex-1">
@@ -179,13 +179,22 @@ export default function About({ navigate }) {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                className="absolute inset-0 flex items-center justify-center"
+                                className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center"
                             >
-                                <div className="text-slate-500 font-light flex items-center gap-3">
-                                    <span className="w-12 h-px bg-slate-300" />
-                                    Select an icon to view phase details
-                                    <span className="w-12 h-px bg-slate-300" />
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-0 bg-indigo-200/50 rounded-full blur-xl animate-pulse" />
+                                    <div className="w-16 h-16 rounded-full bg-white/40 border border-white shadow-lg backdrop-blur-xl flex items-center justify-center relative z-10 transition-transform duration-500 hover:scale-110">
+                                        <Sparkles className="w-8 h-8 text-indigo-500/80 drop-shadow-md" />
+                                    </div>
                                 </div>
+                                <div className="text-slate-500 font-bold tracking-wide uppercase text-sm mb-3 flex items-center gap-4">
+                                    <span className="w-12 h-px bg-gradient-to-r from-transparent to-indigo-300" />
+                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-emerald-500 drop-shadow-sm">Select a phase below</span>
+                                    <span className="w-12 h-px bg-gradient-to-l from-transparent to-indigo-300" />
+                                </div>
+                                <p className="text-slate-400 font-medium text-sm max-w-[200px]">
+                                    Explore the interactive architecture behind the story generation engine.
+                                </p>
                             </motion.div>
                         )}
                     </AnimatePresence>
