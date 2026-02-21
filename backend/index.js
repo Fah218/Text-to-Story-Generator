@@ -9,15 +9,26 @@ const mongoose = require("mongoose");
 
 const app = express();
 
-app.use(cors());
+// Allow all origins (needed for Railway + Vercel cross-origin requests)
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
 app.use(express.json());
+
+// Health check route — Railway uses this to confirm service is running
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "StoryStudio backend is live 🚀" });
+});
 
 app.use("/api/story", storyRoutes);
 app.use("/api/auth", authRoutes);
 
 mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 8000, // Fail fast if Atlas can't be reached in 8s
-  socketTimeoutMS: 20000,         // Drop socket if it's idle for 20s
+  serverSelectionTimeoutMS: 8000,
+  socketTimeoutMS: 20000,
 })
   .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
   .catch((error) => console.error('❌ Database Connection Error: ', error.message));
