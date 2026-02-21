@@ -1,5 +1,9 @@
 # StoryStudio: Gen AI Text-to-Story App
 
+[![Live Demo](https://img.shields.io/badge/🚀%20Live%20Demo-text--to--story--generator--sepia.vercel.app-6366f1?style=for-the-badge)](https://text-to-story-generator-sepia.vercel.app/)
+
+> **🌐 Deployed App:** [https://text-to-story-generator-sepia.vercel.app/](https://text-to-story-generator-sepia.vercel.app/)
+
 ## 🌟 Project Idea: Interactive Story Weaver
 
 **StoryStudio** (Interactive Story Weaver) builds on standard text-to-image generators by creating an immersive, chained narrative experience. Users input **"vibe keywords"** (like "cyberpunk mystery" or "cozy fantasy adventure") to spawn dynamic, fully fleshed-out stories accompanied by matching visuals. 
