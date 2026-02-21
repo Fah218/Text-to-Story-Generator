@@ -1,0 +1,12 @@
+{
+    "name": "storystudio",
+    "version": "1.0.0",
+    "description": "StoryStudio full-stack monorepo",
+    "scripts": {
+        "start": "cd backend && node index.js",
+        "build": "cd backend && npm install"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
