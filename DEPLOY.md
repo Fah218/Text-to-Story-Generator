@@ -37,20 +37,28 @@ You **do NOT need to create a new cluster**. For deployment, simply:
 
 ---
 
-## 🟣 Step 2: Deploy the Backend on Render
+## 🟣 Step 2: Deploy the Backend
+
+You have two options for deploying the backend for free. Choose one:
+
+---
+
+### Option A: Render (Requires Card for Free Tier)
+
+> ⚠️ **Heads up:** When you click "Create Web Service" on Render, it may ask you to **Add a Card**. This is just a verification charge of **$1 USD** that is immediately reversed — you will **not be charged** for free tier usage. If you're okay with this, proceed with Render.
 
 1. Go to [https://render.com](https://render.com) and sign up or log in.
 2. Click **New** → **Web Service**.
 3. Connect your GitHub account and select the `Text-to-Story-Generator` repository.
 4. Configure the service with the following settings:
 
-   | Field        | Value                          |
-   |--------------|--------------------------------|
-   | **Name**     | `storystudio-backend`          |
-   | **Root Directory** | `backend`                |
-   | **Environment** | `Node`                      |
-   | **Build Command** | `npm install`              |
-   | **Start Command** | `node index.js`            |
+   | Field              | Value                   |
+   |--------------------|-------------------------|
+   | **Name**           | `storystudio-backend`   |
+   | **Root Directory** | `backend`               |
+   | **Environment**    | `Node`                  |
+   | **Build Command**  | `npm install`           |
+   | **Start Command**  | `node index.js`         |
 
 5. Scroll down to the **Environment Variables** section and add each key one by one:
 
@@ -77,6 +85,29 @@ You **do NOT need to create a new cluster**. For deployment, simply:
 
 7. Click **Create Web Service**. Render will install dependencies and start the server.
 8. ✅ Once deployed, note down your backend public URL (e.g., `https://storystudio-backend.onrender.com`). You will need this for the frontend.
+
+---
+
+### Option B: Railway (No Card Required ✅)
+
+> ✅ **Railway is the recommended option if you don't want to add a card.** It gives you **$5 free credit per month** with GitHub login — no card needed.
+
+1. Go to [https://railway.app](https://railway.app) and **Sign in with GitHub**.
+2. Click **New Project** → **Deploy from GitHub Repo**.
+3. Select the `Text-to-Story-Generator` repository.
+4. In the project settings, set the **Root Directory** to `backend`.
+5. Click the service → go to **Variables** tab and add all environment variables:
+
+   | Key                  | Value                                    |
+   |----------------------|------------------------------------------|
+   | `PORT`               | `5001`                                   |
+   | `MONGO_URI`          | Your MongoDB Atlas connection string     |
+   | `JWT_SECRET`         | A long, random, secret string            |
+   | `COHERE_API_KEY`     | Your Cohere API key                      |
+   | `LEONARDO_API_KEY`   | Your Leonardo AI API key                 |
+
+6. Railway will auto-detect Node.js and deploy with `npm install` + `node index.js`.
+7. ✅ Go to **Settings** → **Networking** → **Generate Domain** to get your public backend URL (e.g., `https://storystudio-backend.up.railway.app`).
 
 ---
 
