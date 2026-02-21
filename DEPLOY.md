@@ -20,17 +20,20 @@ Before deploying, ensure the following are complete:
 
 ---
 
-## 🗄️ Step 1: Set Up MongoDB Atlas (Database)
+## 🗄️ Step 1: MongoDB Atlas (Already Configured ✅)
 
-1. Go to [https://cloud.mongodb.com](https://cloud.mongodb.com) and sign in.
-2. Create a **free M0 cluster** if you haven't already.
-3. Navigate to **Database Access** → Create a new database user with a strong username and password.
-4. Navigate to **Network Access** → Click **Add IP Address** → Select **Allow Access From Anywhere** (`0.0.0.0/0`) for production.
-5. In your cluster, click **Connect** → **Drivers** → Copy your connection string. It looks like:
+Your MongoDB Atlas cluster is **already set up and connected** — you can confirm this from the `✅ Successfully connected to MongoDB Atlas!` message in your backend terminal.
+
+You **do NOT need to create a new cluster**. For deployment, simply:
+
+1. Open your local `backend/.env` file.
+2. Copy the value of `MONGO_URI` — it looks like:
    ```
    mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<dbname>?retryWrites=true&w=majority
    ```
-6. ✅ Keep this connection string ready — you'll paste it as `MONGO_URI` in the backend deployment step.
+3. Paste it as the `MONGO_URI` environment variable in your Render backend service (Step 2 below).
+
+> ⚠️ **Important:** In MongoDB Atlas, go to **Network Access** → make sure `0.0.0.0/0` (Allow Access from Anywhere) is added to the IP whitelist so Render's servers can connect to your cluster.
 
 ---
 
