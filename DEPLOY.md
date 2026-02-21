@@ -62,8 +62,18 @@ You **do NOT need to create a new cluster**. For deployment, simply:
    | `COHERE_API_KEY`     | Your Cohere API key                      |
    | `LEONARDO_API_KEY`   | Your Leonardo AI API key                 |
 
-6. Click **Create Web Service**. Render will build and deploy the backend.
-7. ✅ Once deployed, note down your backend public URL (e.g., `https://storystudio-backend.onrender.com`). You will need this for the frontend.
+6. Scroll down to the **Advanced** section (just below Environment Variables) and configure these additional settings:
+
+   | Advanced Setting        | Recommended Value                      |
+   |-------------------------|----------------------------------------|
+   | **Health Check Path**   | `/` (or `/api/health` if you have one) |
+   | **Auto-Deploy**         | `Yes` — re-deploys on every GitHub push |
+   | **Instance Type**       | `Free` (or `Starter` for no sleep)     |
+
+   > 💡 **Tip — Preventing Sleep on Free Tier:** Render's free tier spins down after 15 minutes of inactivity, causing a ~30 second cold start on the next request. To avoid this during a demo or hackathon, use a free uptime monitoring service like [UptimeRobot](https://uptimerobot.com) to ping your backend URL every 10 minutes and keep it awake.
+
+7. Click **Create Web Service**. Render will install dependencies and start the server.
+8. ✅ Once deployed, note down your backend public URL (e.g., `https://storystudio-backend.onrender.com`). You will need this for the frontend.
 
 ---
 
