@@ -22,6 +22,42 @@ This is perfect for hackathon demos that wow judges with creativity, polish, and
 
 This repository contains a full-stack Next-Generation React application.
 
+### File & Folder Explorer
+
+```text
+Story Studio 2/
+├── frontend/                 # React frontend (Vite)
+│   ├── public/               # Static public assets
+│   ├── src/                  # Source code for the frontend
+│   │   ├── api/              # API configurations (e.g., storyApi.js)
+│   │   ├── assets/           # React component assets
+│   │   ├── components/       # Reusable UI React components (Home, AuthModal, etc.)
+│   │   ├── hooks/            # Custom React hooks (e.g., useStoryGeneration)
+│   │   ├── store/            # Redux store and slices (uiSlice, storySlice)
+│   │   ├── App.jsx           # Main application routing
+│   │   ├── index.css         # Global Tailwind CSS classes
+│   │   └── main.jsx          # Application entry point
+│   ├── eslint.config.js      # ESLint configuration
+│   ├── index.html            # Main HTML template
+│   ├── package.json          # Frontend dependencies
+│   └── vite.config.js        # Vite configuration
+├── backend/                  # Node.js + Express backend
+│   ├── controllers/          # Route controller logic (authController, storyController)
+│   ├── models/               # MongoDB schema models (User.js)
+│   ├── routes/               # Express API routing (authRoutes, storyRoutes)
+│   ├── services/             # AI API integration services (textService, imageService)
+│   ├── .env.sample           # Sample environment variables
+│   ├── index.js              # Server entry point
+│   └── package.json          # Backend dependencies
+├── DEPLOY.md                 # Deployment documentation
+├── Dockerfile                # Docker configuration
+├── mongo_connect.md          # MongoDB documentation
+├── nixpacks.toml             # Built-in nixpacks configurations
+├── package.json              # Main project dependencies
+├── railway.toml              # Railway deployment config
+└── README.md                 # Current documentation file
+```
+
 ### The Frontend (`/frontend`)
 * **Framework:** React + Vite for lightning-fast development.
 * **Styling:** Vanilla Tailwind CSS configured with a custom 'Light Gradient & Glass Cards' aesthetic.
