@@ -279,7 +279,7 @@ export default function App() {
       // Stage 2 - Writing
       setTimeout(() => dispatch(setLoadingStage(2)), 2000);
 
-      const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+      const API_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, '');
       const response = await axios.post(
         `${API_URL}/api/story/generate`,
         {

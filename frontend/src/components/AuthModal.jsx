@@ -25,7 +25,7 @@ export default function AuthModal() {
  ? { email, password}
  : { name, email, password};
 
- const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+ const API_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
  const response = await axios.post(
  `${API_URL}/api/auth${endpoint}`,
  payload,
