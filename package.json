@@ -8,5 +8,9 @@
     },
     "engines": {
         "node": ">=18.0.0"
+    },
+    "dependencies": {
+        "cohere-ai": "^7.20.0",
+        "form-data": "^4.0.5"
     }
 }

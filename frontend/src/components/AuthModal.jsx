@@ -25,8 +25,9 @@ export default function AuthModal() {
  ? { email, password}
  : { name, email, password};
 
+ const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
  const response = await axios.post(
- `http://localhost:5001/api/auth${endpoint}`,
+ `${API_URL}/api/auth${endpoint}`,
  payload,
  { timeout: 10000} // 10 second timeout — fail fast instead of hanging
  );
