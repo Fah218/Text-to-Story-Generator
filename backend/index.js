@@ -38,12 +38,16 @@ app.get("/", (req, res) => {
 app.use("/api/story", storyRoutes);
 app.use("/api/auth", authRoutes);
 
-mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 8000,
-  socketTimeoutMS: 20000,
-})
-  .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
-  .catch((error) => console.error('❌ Database Connection Error: ', error.message));
+if (!process.env.MONGO_URI) {
+  console.error("CRITICAL ERROR: MONGO_URI environment variable is not set!");
+} else {
+  mongoose.connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 8000,
+    socketTimeoutMS: 20000,
+  })
+    .then(() => console.log('✅ Successfully connected to MongoDB Atlas!'))
+    .catch((error) => console.error('❌ Database Connection Error: ', error.message));
+}
 
 
 const PORT = process.env.PORT || 5000;
