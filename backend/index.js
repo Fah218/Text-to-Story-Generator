@@ -9,11 +9,23 @@ const mongoose = require("mongoose");
 
 const app = express();
 
+// Handle CORS preflight for all routes (must come before any other middleware)
+app.options("*", (req, res) => {
+  res.set({
+    "Access-Control-Allow-Origin": req.headers.origin || "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+  });
+  res.status(200).end();
+});
+
 // Allow all origins (needed for Railway + Vercel cross-origin requests)
 app.use(cors({
-  origin: "*",
+  origin: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 }));
 
 app.use(express.json());
